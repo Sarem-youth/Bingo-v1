@@ -36,11 +36,10 @@ exports.register = async (req, res) => {
       role,
       parent_agent_id: role === 'cashier' ? parent_agent_id : null,
       commission_rate: role === 'agent' ? commission_rate : null,
-      // created_by: req.userId // If registration is done by an authenticated user (e.g. admin creating users)
     });
 
-    // TODO: Log registration in AuditLog
-    // await db.AuditLog.create({ user_id: newUser.user_id, action: `User registered: ${newUser.username}` });
+    // Log registration in AuditLog
+    await db.AuditLog.create({ user_id: newUser.user_id, action: `User registered: ${newUser.username}` });
 
 
     res.status(201).send({
@@ -81,8 +80,8 @@ exports.login = async (req, res) => {
       expiresIn: process.env.JWT_EXPIRES_IN || 86400, // 24 hours
     });
 
-    // TODO: Log login in AuditLog
-    // await db.AuditLog.create({ user_id: user.user_id, action: `User logged in: ${user.username}` });
+    // Log login in AuditLog
+    await db.AuditLog.create({ user_id: user.user_id, action: `User logged in: ${user.username}` });
 
     res.status(200).send({
       user_id: user.user_id,
@@ -147,8 +146,10 @@ exports.updateUser = async (req, res) => {
 
     await user.save();
 
-    // TODO: Log update in AuditLog
-    // await db.AuditLog.create({ user_id: req.userId, action: `User updated: ${user.username} (ID: ${user.user_id})` });
+    // Log update in AuditLog
+    // Note: req.userId is the ID of the user performing the action (from JWT)
+    // userId is the ID of the user being updated (from params)
+    await db.AuditLog.create({ user_id: req.userId, action: `User updated: ${user.username} (ID: ${user.user_id}) by user ID: ${req.userId}` });
 
 
     res.status(200).send({ message: 'User updated successfully.', user: {
@@ -173,11 +174,12 @@ exports.deleteUser = async (req, res) => {
       return res.status(404).send({ message: 'User not found.' });
     }
 
-    const deletedUsername = user.username; // Store for logging before deletion
+    const deletedUsername = user.username; // Capture username before deletion
     await user.destroy();
 
-    // TODO: Log deletion in AuditLog
-    // await db.AuditLog.create({ user_id: req.userId, action: `User deleted: ${deletedUsername} (ID: ${userId})` });
+    // Log deletion in AuditLog
+    // req.userId is the ID of the admin performing the deletion
+    await db.AuditLog.create({ user_id: req.userId, action: `User deleted: ${deletedUsername} (ID: ${userId}) by user ID: ${req.userId}` });
 
     res.status(200).send({ message: 'User deleted successfully.' });
   } catch (error) {
