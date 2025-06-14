@@ -1,18 +1,4 @@
-const dbConfig = require('../config/db.config.js');
-const Sequelize = require('sequelize');
-
-const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
-  host: dbConfig.HOST,
-  port: dbConfig.PORT,
-  dialect: dbConfig.dialect,
-  logging: dbConfig.logging,
-  pool: {
-    max: dbConfig.pool.max,
-    min: dbConfig.pool.min,
-    acquire: dbConfig.pool.acquire,
-    idle: dbConfig.pool.idle,
-  },
-});
+const { sequelize, Sequelize } = require('../config/db.config.js'); // Use the exported sequelize instance and Sequelize library
 
 const db = {};
 
@@ -29,88 +15,79 @@ db.BingoCard = require('./bingoCard.model.js')(sequelize, Sequelize.DataTypes);
 
 // Define associations
 
-// User associations
-// An Admin (User) can create multiple Agents/Cashiers (Users)
+// User self-referential associations for created_by and parent_agent_id
 db.User.hasMany(db.User, { as: 'CreatedUsers', foreignKey: 'created_by', onDelete: 'SET NULL' });
 db.User.belongsTo(db.User, { as: 'Creator', foreignKey: 'created_by' });
 
-// An Agent (User) can be a parent to multiple Cashiers (Users)
 db.User.hasMany(db.User, { as: 'ManagedCashiers', foreignKey: 'parent_agent_id', onDelete: 'SET NULL' });
 db.User.belongsTo(db.User, { as: 'ParentAgent', foreignKey: 'parent_agent_id' });
 
 // User (Agent) to Company
+// An Agent registers multiple Companies. A Company is registered by one Agent.
 db.User.hasMany(db.Company, { as: 'RegisteredCompanies', foreignKey: 'registered_by_agent_id' });
-// onDelete: 'RESTRICT' is the default for non-nullable foreign keys if not specified,
-// but Sequelize doesn't directly enforce RESTRICT in hasMany. It's enforced by DB.
+db.Company.belongsTo(db.User, { as: 'RegisteringAgent', foreignKey: 'registered_by_agent_id' });
 
 // User (Cashier) to CashierAssignment
+// A Cashier can have multiple assignments. An assignment belongs to one Cashier.
 db.User.hasMany(db.CashierAssignment, { as: 'Assignments', foreignKey: 'cashier_user_id' });
-// onDelete: 'CASCADE' handled by db.CashierAssignment.belongsTo(db.User)
-
-// User (Cashier) to GameSession
-db.User.hasMany(db.GameSession, { as: 'ManagedGameSessions', foreignKey: 'cashier_user_id' });
-// onDelete: 'RESTRICT' handled by db.GameSession.belongsTo(db.User)
-
-// User (Cashier who processed transaction) to Transaction
-db.User.hasMany(db.Transaction, { as: 'ProcessedTransactions', foreignKey: 'user_id' });
-// onDelete: 'RESTRICT' handled by db.Transaction.belongsTo(db.User, { as: 'ProcessingUser' })
-
-db.User.hasMany(db.Transaction, { as: 'AssociatedAgentTransactions', foreignKey: 'agent_id' });
-// onDelete: 'RESTRICT' handled by db.Transaction.belongsTo(db.User, { as: 'AssociatedAgent' })
-
-
-// Company associations
-// Company to User (Agent)
-db.Company.belongsTo(db.User, { as: 'RegisteringAgent', foreignKey: 'registered_by_agent_id', onDelete: 'RESTRICT' });
+db.CashierAssignment.belongsTo(db.User, { as: 'Cashier', foreignKey: 'cashier_user_id' });
 
 // Company to CashierAssignment
-db.Company.hasMany(db.CashierAssignment, { as: 'CashierAssignments', foreignKey: 'company_id' });
-// onDelete: 'CASCADE' handled by db.CashierAssignment.belongsTo(db.Company)
+// A Company can have multiple Cashier assignments. An assignment belongs to one Company.
+db.Company.hasMany(db.CashierAssignment, { as: 'CashierLinks', foreignKey: 'company_id' });
+db.CashierAssignment.belongsTo(db.Company, { as: 'AssignedCompany', foreignKey: 'company_id' });
+
+// User (Cashier) to GameSession
+// A Cashier runs multiple GameSessions. A GameSession is run by one Cashier.
+db.User.hasMany(db.GameSession, { as: 'OperatedGameSessions', foreignKey: 'cashier_user_id' });
+db.GameSession.belongsTo(db.User, { as: 'OperatorCashier', foreignKey: 'cashier_user_id' });
 
 // Company to GameSession
-db.Company.hasMany(db.GameSession, { as: 'GameSessions', foreignKey: 'company_id' });
-// onDelete: 'CASCADE' handled by db.GameSession.belongsTo(db.Company)
+// A Company hosts multiple GameSessions. A GameSession belongs to one Company.
+db.Company.hasMany(db.GameSession, { as: 'HostedGameSessions', foreignKey: 'company_id' });
+db.GameSession.belongsTo(db.Company, { as: 'HostingCompany', foreignKey: 'company_id' });
 
-// Company to Transaction
-db.Company.hasMany(db.Transaction, { as: 'Transactions', foreignKey: 'company_id' });
-// onDelete: 'RESTRICT' handled by db.Transaction.belongsTo(db.Company)
+// GameSession to BingoCard
+// A GameSession has multiple BingoCards. A BingoCard belongs to one GameSession.
+db.GameSession.hasMany(db.BingoCard, { as: 'CardsInSession', foreignKey: 'game_session_id' });
+db.BingoCard.belongsTo(db.GameSession, { as: 'Session', foreignKey: 'game_session_id' });
+
+// Transaction Associations
+
+// Transaction to GameSession
+db.Transaction.belongsTo(db.GameSession, { as: 'RelatedGameSession', foreignKey: 'game_session_id', allowNull: true });
+db.GameSession.hasMany(db.Transaction, { as: 'SessionTransactions', foreignKey: 'game_session_id' });
+
+// Transaction to User (Cashier who processed)
+db.Transaction.belongsTo(db.User, { as: 'ProcessingUser', foreignKey: 'user_id' });
+db.User.hasMany(db.Transaction, { as: 'ProcessedTransactions', foreignKey: 'user_id' });
+
+// Transaction to Company
+db.Transaction.belongsTo(db.Company, { as: 'RelatedCompany', foreignKey: 'company_id' });
+db.Company.hasMany(db.Transaction, { as: 'CompanyTransactions', foreignKey: 'company_id' });
+
+// Transaction to User (Agent associated with the company)
+db.Transaction.belongsTo(db.User, { as: 'AssociatedAgent', foreignKey: 'agent_id' });
+// Note: A user can be an agent for multiple transactions.
+// If you need to distinguish transactions processed by a user vs. transactions associated with an agent user:
+// db.User.hasMany(db.Transaction, { as: 'AgentLinkedTransactions', foreignKey: 'agent_id' });
+// This might conflict if 'user_id' and 'agent_id' are part of the same 'hasMany' on User without different aliases.
+// For clarity, ensure aliases are distinct if a User model has multiple foreign keys to the Transaction model.
+// The current setup implies 'ProcessedTransactions' are by user_id (cashier) and 'AssociatedAgent' links to agent_id.
+
+// Transaction to BingoCard (A buy-in transaction might be linked to a card)
+// A transaction can be for one bingo card purchase. A bingo card is purchased via one transaction.
+db.Transaction.hasOne(db.BingoCard, { as: 'PurchaseCard', foreignKey: 'transaction_id', allowNull: true });
+db.BingoCard.belongsTo(db.Transaction, { as: 'BuyInTransaction', foreignKey: 'transaction_id', allowNull: true });
 
 
-// CashierAssignment associations
-db.CashierAssignment.belongsTo(db.User, { as: 'Cashier', foreignKey: 'cashier_user_id', onDelete: 'CASCADE' });
-db.CashierAssignment.belongsTo(db.Company, { as: 'Company', foreignKey: 'company_id', onDelete: 'CASCADE' });
-
-
-// GameSession associations
-db.GameSession.belongsTo(db.Company, { as: 'Company', foreignKey: 'company_id', onDelete: 'CASCADE' });
-db.GameSession.belongsTo(db.User, { as: 'Cashier', foreignKey: 'cashier_user_id', onDelete: 'RESTRICT' });
-db.GameSession.hasMany(db.BingoCard, { as: 'BingoCards', foreignKey: 'game_session_id' });
-// onDelete: 'CASCADE' handled by db.BingoCard.belongsTo(db.GameSession)
-db.GameSession.hasMany(db.Transaction, { as: 'Transactions', foreignKey: 'game_session_id' });
-// onDelete: 'SET NULL' handled by db.Transaction.belongsTo(db.GameSession)
-
-
-// BingoCard associations
-db.BingoCard.belongsTo(db.GameSession, { as: 'GameSession', foreignKey: 'game_session_id', onDelete: 'CASCADE' });
-db.BingoCard.belongsTo(db.Transaction, { as: 'PurchaseTransaction', foreignKey: 'transaction_id', onDelete: 'SET NULL', allowNull: true });
-
-
-// Transaction associations
-db.Transaction.belongsTo(db.GameSession, { as: 'GameSession', foreignKey: 'game_session_id', onDelete: 'SET NULL', allowNull: true });
-db.Transaction.belongsTo(db.User, { as: 'ProcessingUser', foreignKey: 'user_id', onDelete: 'RESTRICT' }); // Cashier
-db.Transaction.belongsTo(db.Company, { as: 'Company', foreignKey: 'company_id', onDelete: 'RESTRICT' });
-db.Transaction.belongsTo(db.User, { as: 'AssociatedAgent', foreignKey: 'agent_id', onDelete: 'RESTRICT' }); // Agent
-// If one transaction can be for multiple cards, and BingoCard has transaction_id FK
-db.Transaction.hasMany(db.BingoCard, { as: 'PurchasedCards', foreignKey: 'transaction_id', allowNull: true });
-
-
-// Synchronize all models
-// db.sequelize.sync({ force: false }) // Use { force: true } to drop and re-create tables. Be cautious in production.
+// Sync all models that are not already in the database
+// sequelize.sync({ alter: true }) // Use with caution in production, alter can be destructive.
 //   .then(() => {
 //     console.log('Database & tables synced!');
 //   })
-//   .catch(err => {
-//     console.error('Error syncing database:', err);
+//   .catch(error => {
+//     console.error('Error syncing database:', error);
 //   });
 
 module.exports = db;
