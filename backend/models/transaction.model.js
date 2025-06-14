@@ -20,58 +20,51 @@ module.exports = (sequelize) => {
     },
     game_session_id: {
       type: DataTypes.INTEGER,
-      allowNull: true, // Can be null if it's a payout not tied to a specific game (e.g. agent commission)
+      allowNull: true, // May not be linked to a game session (e.g., commission payouts)
       references: {
-        model: 'game_sessions', // Table name
+        model: 'game_sessions', // table name
         key: 'game_session_id',
       },
       onDelete: 'SET NULL',
     },
-    user_id: { // Cashier who processed or user involved (e.g. agent for their commission payout)
+    user_id: { // Cashier who processed or is related to the transaction
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
-        model: 'users', // Table name
+        model: 'users', // table name
         key: 'user_id',
       },
-      onDelete: 'RESTRICT', // A user must exist for a transaction
+      onDelete: 'RESTRICT',
     },
     company_id: {
       type: DataTypes.INTEGER,
-      allowNull: true, // Nullable for admin/agent payouts not tied to a specific company
+      allowNull: false,
       references: {
-        model: 'companies', // Table name
+        model: 'companies', // table name
         key: 'company_id',
       },
-      onDelete: 'SET NULL',
+      onDelete: 'RESTRICT',
     },
-    agent_id: { // The agent associated with the company where the transaction occurred, or the agent receiving commission
+    agent_id: { // Agent associated with the company for this transaction
       type: DataTypes.INTEGER,
-      allowNull: true, // Nullable for admin transactions or direct player payouts not via agent
+      allowNull: false, // Assuming all game-related transactions will have an associated agent via the company
       references: {
-        model: 'users', // Table name, refers to a user with 'agent' role
+        model: 'users', // table name
         key: 'user_id',
       },
-      onDelete: 'SET NULL',
+      onDelete: 'RESTRICT',
     },
-    timestamp: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW,
-      allowNull: false,
+    notes: {
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
-    // created_at and updated_at are handled by Sequelize's timestamps option
+    // timestamp is handled by Sequelize's createdAt timestamp
   }, {
     tableName: 'transactions',
     timestamps: true,
-    createdAt: 'created_at', // Or use default 'createdAt'
-    updatedAt: 'updated_at', // Or use default 'updatedAt'
-    // Sequelize by default uses createdAt and updatedAt. If your SQL schema uses `timestamp` for the transaction time,
-    // and you want separate audit trails, you might need to adjust. The current SQL has `timestamp`.
-    // If `timestamp` is the primary time for the transaction event, then `createdAt` and `updatedAt` are for the record itself.
+    createdAt: 'timestamp', // Using 'timestamp' as per the SQL schema
+    updatedAt: 'updated_at', // Sequelize will add this, ensure it's in your DB or disable it if not needed
   });
-
-  // Add model-level validations if needed, e.g., ensuring agent_id refers to an agent.
-  // This is often better handled in service layers or through database triggers/constraints if complex.
 
   return Transaction;
 };
