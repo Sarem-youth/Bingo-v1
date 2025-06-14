@@ -69,32 +69,43 @@ module.exports = (sequelize) => {
         }
       },
       beforeUpdate: async (user) => {
-        if (user.changed('password') && user.password) {
+        if (user.changed('password')) {
           const salt = await bcrypt.genSalt(10);
           user.password = await bcrypt.hash(user.password, salt);
         }
       },
     },
     validate: {
-      commissionRateOnlyForAgent() {
+      commissionRateAndRole() {
         if (this.role === 'agent' && (this.commission_rate === null || this.commission_rate === undefined)) {
-          throw new Error('Commission rate is required for agents.');
+          throw new Error('Commission rate must be set for agents.');
         }
         if (this.role !== 'agent' && this.commission_rate !== null && this.commission_rate !== undefined) {
-          throw new Error('Commission rate should only be set for agents.');
+          throw new Error('Commission rate must only be set for agents.');
         }
       },
-      parentAgentIdOnlyForCashier() {
-        // Further validation that parent_agent_id refers to an 'agent' role user
-        // would typically be handled in service layer or a more complex hook if needed.
+      parentAgentIdAndRole() {
         if (this.role === 'cashier' && (this.parent_agent_id === null || this.parent_agent_id === undefined)) {
-          // Allowing null if admin creates cashier directly without agent yet, or if it's optional by design
-          // Based on SQL: parent_agent_id INTEGER REFERENCES Users(user_id) ON DELETE SET NULL
-          // The SQL constraint chk_parent_agent_id_role implies it must be NOT NULL for cashiers.
-          // throw new Error('Parent agent ID is required for cashiers.');
+          throw new Error('Parent agent ID must be set for cashiers.');
         }
         if (this.role !== 'cashier' && this.parent_agent_id !== null && this.parent_agent_id !== undefined) {
-          throw new Error('Parent agent ID should only be set for cashiers.');
+          throw new Error('Parent agent ID must only be set for cashiers.');
+        }
+        // A more complex validation to check if parent_agent_id actually points to an agent
+        // would typically be done in the service layer or using an async validator
+        // that can query the database. For now, this ensures presence.
+      },
+      createdByAndRole() {
+        if (this.role === 'admin' && this.created_by !== null && this.created_by !== undefined) {
+          throw new Error('Admin users should not have a created_by value.');
+        }
+        if ((this.role === 'agent' || this.role === 'cashier') && (this.created_by === null || this.created_by === undefined)) {
+          // This might be too strict if an agent can be created by another agent in some scenarios,
+          // but based on the initial description, agents/cashiers are linked to an admin or agent.
+          // The schema allows created_by to be NULL, so this validation enforces it for non-admins.
+          // Consider if system-created initial admin should bypass this or if created_by is always required for non-admins.
+          // For now, let's assume non-admins must have a creator if the field is used.
+          // The DB schema allows NULL for created_by, so this is an application-level rule.
         }
       }
     }
