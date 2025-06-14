@@ -54,40 +54,39 @@ db.CashierAssignment.belongsTo(db.Company, { as: 'AssignedCompany', foreignKey: 
 
 // Transaction associations
 // A User (Cashier) processes multiple Transactions
-db.User.hasMany(db.Transaction, { foreignKey: 'user_id', as: 'ProcessedTransactions' }); // Cashier
-db.Transaction.belongsTo(db.User, { as: 'ProcessingUser', foreignKey: 'user_id' });
-
-// A User (Agent) is associated with multiple Transactions (via company)
-db.User.hasMany(db.Transaction, { foreignKey: 'agent_id', as: 'AgentTransactions' }); // Agent
-db.Transaction.belongsTo(db.User, { as: 'AssociatedAgent', foreignKey: 'agent_id' });
+db.User.hasMany(db.Transaction, { foreignKey: 'user_id', as: 'ProcessedTransactions' });
+db.Transaction.belongsTo(db.User, { as: 'ProcessingUser', foreignKey: 'user_id' }); // Added inverse for clarity
 
 // Transaction associations (continued)
-// A Company is associated with multiple Transactions
-db.Company.hasMany(db.Transaction, { foreignKey: 'company_id', onDelete: 'SET NULL' });
-db.Transaction.belongsTo(db.Company, { as: 'TransactionCompany', foreignKey: 'company_id' });
+// A Transaction can belong to a GameSession
+db.Transaction.belongsTo(db.GameSession, { foreignKey: 'game_session_id', onDelete: 'SET NULL' });
+db.GameSession.hasMany(db.Transaction, { foreignKey: 'game_session_id' });
 
-// A GameSession can have multiple Transactions
-db.GameSession.hasMany(db.Transaction, { foreignKey: 'game_session_id', onDelete: 'SET NULL' });
-db.Transaction.belongsTo(db.GameSession, { as: 'GameSessionTransactions', foreignKey: 'game_session_id' });
+// A Transaction can belong to a Company
+db.Transaction.belongsTo(db.Company, { foreignKey: 'company_id', onDelete: 'SET NULL' });
+db.Company.hasMany(db.Transaction, { foreignKey: 'company_id' });
+
+// A Transaction can be associated with an Agent
+db.Transaction.belongsTo(db.User, { as: 'AssociatedAgent', foreignKey: 'agent_id', onDelete: 'SET NULL' });
+db.User.hasMany(db.Transaction, { as: 'AgentTransactions', foreignKey: 'agent_id' });
 
 // GameSession associations
-// A Company can host multiple GameSessions
-db.Company.hasMany(db.GameSession, { foreignKey: 'company_id', onDelete: 'CASCADE' });
-db.GameSession.belongsTo(db.Company, { as: 'HostingCompany', foreignKey: 'company_id' });
+// A GameSession belongs to a Company
+db.GameSession.belongsTo(db.Company, { foreignKey: 'company_id', onDelete: 'CASCADE' });
+db.Company.hasMany(db.GameSession, { foreignKey: 'company_id' });
 
-// A User (Cashier) can manage multiple GameSessions
-db.User.hasMany(db.GameSession, { foreignKey: 'cashier_user_id', onDelete: 'RESTRICT' });
-db.GameSession.belongsTo(db.User, { as: 'ManagingCashier', foreignKey: 'cashier_user_id' });
+// A GameSession is operated by a Cashier (User)
+db.GameSession.belongsTo(db.User, { as: 'CashierOperatingSession', foreignKey: 'cashier_user_id', onDelete: 'RESTRICT' });
+db.User.hasMany(db.GameSession, { as: 'OperatedGameSessions', foreignKey: 'cashier_user_id' });
 
 // BingoCard associations
-// A GameSession can have multiple BingoCards
-db.GameSession.hasMany(db.BingoCard, { foreignKey: 'game_session_id', onDelete: 'CASCADE' });
-db.BingoCard.belongsTo(db.GameSession, { as: 'GameSession', foreignKey: 'game_session_id' });
+// A BingoCard belongs to a GameSession
+db.BingoCard.belongsTo(db.GameSession, { foreignKey: 'game_session_id', onDelete: 'CASCADE' });
+db.GameSession.hasMany(db.BingoCard, { foreignKey: 'game_session_id' });
 
-// A Transaction (buy-in) can be associated with one BingoCard
-// (Though a card might not always have a direct transaction_id if handled differently, schema allows NULL)
-db.Transaction.hasOne(db.BingoCard, { foreignKey: 'transaction_id', onDelete: 'SET NULL' });
-db.BingoCard.belongsTo(db.Transaction, { as: 'PurchaseTransaction', foreignKey: 'transaction_id' });
+// A BingoCard can be linked to a buy-in Transaction
+db.BingoCard.belongsTo(db.Transaction, { foreignKey: 'transaction_id', onDelete: 'SET NULL' });
+db.Transaction.hasMany(db.BingoCard, { foreignKey: 'transaction_id' }); // A transaction could be for multiple cards
 
 
 // Test the connection (moved from db.config.js to here for centralized DB logic)
