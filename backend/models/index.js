@@ -17,10 +17,10 @@ db.BingoCard = require('./bingoCard.model.js')(sequelize, Sequelize.DataTypes);
 
 // User self-referential associations for created_by and parent_agent_id
 db.User.hasMany(db.User, { as: 'CreatedUsers', foreignKey: 'created_by', onDelete: 'SET NULL' });
-db.User.belongsTo(db.User, { as: 'Creator', foreignKey: 'created_by' });
+db.User.belongsTo(db.User, { as: 'Creator', foreignKey: 'created_by', constraints: false }); // constraints: false if created_by can be null or refer to non-existent user after deletion
 
-db.User.hasMany(db.User, { as: 'ManagedCashiers', foreignKey: 'parent_agent_id', onDelete: 'SET NULL' });
-db.User.belongsTo(db.User, { as: 'ParentAgent', foreignKey: 'parent_agent_id' });
+db.User.hasMany(db.User, { as: 'ManagedCashiersByAgent', foreignKey: 'parent_agent_id', onDelete: 'SET NULL' }); // Renamed for clarity
+db.User.belongsTo(db.User, { as: 'ParentAgentForCashier', foreignKey: 'parent_agent_id', constraints: false }); // Renamed for clarity
 
 // User (Agent) to Company
 // An Agent registers multiple Companies. A Company is registered by one Agent.
@@ -28,57 +28,71 @@ db.User.hasMany(db.Company, { as: 'RegisteredCompanies', foreignKey: 'registered
 db.Company.belongsTo(db.User, { as: 'RegisteringAgent', foreignKey: 'registered_by_agent_id' });
 
 // User (Cashier) to CashierAssignment
-// A Cashier can have multiple assignments. An assignment belongs to one Cashier.
-db.User.hasMany(db.CashierAssignment, { as: 'Assignments', foreignKey: 'cashier_user_id' });
+// A Cashier can have multiple assignments (historically). An assignment belongs to one Cashier.
+db.User.hasMany(db.CashierAssignment, { as: 'AssignmentsAsCashier', foreignKey: 'cashier_user_id' }); // Renamed for clarity
 db.CashierAssignment.belongsTo(db.User, { as: 'Cashier', foreignKey: 'cashier_user_id' });
 
 // Company to CashierAssignment
 // A Company can have multiple Cashier assignments. An assignment belongs to one Company.
-db.Company.hasMany(db.CashierAssignment, { as: 'CashierLinks', foreignKey: 'company_id' });
+db.Company.hasMany(db.CashierAssignment, { as: 'CashierAssignmentsForCompany', foreignKey: 'company_id' }); // Renamed for clarity
 db.CashierAssignment.belongsTo(db.Company, { as: 'AssignedCompany', foreignKey: 'company_id' });
 
-// User (Cashier) to GameSession
-// A Cashier runs multiple GameSessions. A GameSession is run by one Cashier.
-db.User.hasMany(db.GameSession, { as: 'OperatedGameSessions', foreignKey: 'cashier_user_id' });
-db.GameSession.belongsTo(db.User, { as: 'OperatorCashier', foreignKey: 'cashier_user_id' });
-
 // Company to GameSession
-// A Company hosts multiple GameSessions. A GameSession belongs to one Company.
-db.Company.hasMany(db.GameSession, { as: 'HostedGameSessions', foreignKey: 'company_id' });
+// A Company can host multiple GameSessions. A GameSession belongs to one Company.
+db.Company.hasMany(db.GameSession, { as: 'GameSessionsHosted', foreignKey: 'company_id' });
 db.GameSession.belongsTo(db.Company, { as: 'HostingCompany', foreignKey: 'company_id' });
 
+// User (Cashier) to GameSession
+// A Cashier (User) can run multiple GameSessions. A GameSession is run by one Cashier.
+db.User.hasMany(db.GameSession, { as: 'GameSessionsRunByCashier', foreignKey: 'cashier_user_id' });
+db.GameSession.belongsTo(db.User, { as: 'RunningCashier', foreignKey: 'cashier_user_id' });
+
 // GameSession to BingoCard
-// A GameSession has multiple BingoCards. A BingoCard belongs to one GameSession.
+// A GameSession can have many BingoCards. A BingoCard belongs to one GameSession.
 db.GameSession.hasMany(db.BingoCard, { as: 'CardsInSession', foreignKey: 'game_session_id' });
-db.BingoCard.belongsTo(db.GameSession, { as: 'Session', foreignKey: 'game_session_id' });
+db.BingoCard.belongsTo(db.GameSession, { as: 'GameSession', foreignKey: 'game_session_id' });
 
-// Transaction Associations
+// GameSession to Transaction
+// A GameSession can have many Transactions. A Transaction can optionally belong to one GameSession.
+db.GameSession.hasMany(db.Transaction, { as: 'TransactionsInSession', foreignKey: 'game_session_id' });
+db.Transaction.belongsTo(db.GameSession, { as: 'GameSession', foreignKey: 'game_session_id' });
 
-// Transaction to GameSession
-db.Transaction.belongsTo(db.GameSession, { as: 'RelatedGameSession', foreignKey: 'game_session_id', allowNull: true });
-db.GameSession.hasMany(db.Transaction, { as: 'SessionTransactions', foreignKey: 'game_session_id' });
-
-// Transaction to User (Cashier who processed)
-db.Transaction.belongsTo(db.User, { as: 'ProcessingUser', foreignKey: 'user_id' });
+// User (Cashier) to Transaction (user_id on Transaction is the cashier who processed)
+// A User (Cashier) processes many Transactions. A Transaction is processed by one User.
 db.User.hasMany(db.Transaction, { as: 'ProcessedTransactions', foreignKey: 'user_id' });
+db.Transaction.belongsTo(db.User, { as: 'ProcessingUser', foreignKey: 'user_id' });
 
-// Transaction to Company
-db.Transaction.belongsTo(db.Company, { as: 'RelatedCompany', foreignKey: 'company_id' });
+// Company to Transaction
+// A Company is associated with many Transactions. A Transaction belongs to one Company.
 db.Company.hasMany(db.Transaction, { as: 'CompanyTransactions', foreignKey: 'company_id' });
+db.Transaction.belongsTo(db.Company, { as: 'AssociatedCompany', foreignKey: 'company_id' });
 
-// Transaction to User (Agent associated with the company)
+// User (Agent) to Transaction (agent_id on Transaction is the agent associated with the company)
+// An Agent (User) is associated with many Transactions. A Transaction is associated with one Agent.
+db.User.hasMany(db.Transaction, { as: 'AgentTransactions', foreignKey: 'agent_id' });
 db.Transaction.belongsTo(db.User, { as: 'AssociatedAgent', foreignKey: 'agent_id' });
-// Note: A user can be an agent for multiple transactions.
-// If you need to distinguish transactions processed by a user vs. transactions associated with an agent user:
-// db.User.hasMany(db.Transaction, { as: 'AgentLinkedTransactions', foreignKey: 'agent_id' });
-// This might conflict if 'user_id' and 'agent_id' are part of the same 'hasMany' on User without different aliases.
-// For clarity, ensure aliases are distinct if a User model has multiple foreign keys to the Transaction model.
-// The current setup implies 'ProcessedTransactions' are by user_id (cashier) and 'AssociatedAgent' links to agent_id.
 
-// Transaction to BingoCard (A buy-in transaction might be linked to a card)
-// A transaction can be for one bingo card purchase. A bingo card is purchased via one transaction.
-db.Transaction.hasOne(db.BingoCard, { as: 'PurchaseCard', foreignKey: 'transaction_id', allowNull: true });
-db.BingoCard.belongsTo(db.Transaction, { as: 'BuyInTransaction', foreignKey: 'transaction_id', allowNull: true });
+// Transaction to BingoCard
+// A Transaction (player_buy_in) can be linked to one BingoCard (as per current BingoCard.transaction_id FK).
+// If one transaction could cover multiple cards, BingoCard would need a transaction_id,
+// and Transaction could have many BingoCards. The current model BingoCard.transaction_id supports this.
+db.Transaction.hasMany(db.BingoCard, { as: 'PurchasedCards', foreignKey: 'transaction_id' });
+db.BingoCard.belongsTo(db.Transaction, { as: 'PurchaseTransaction', foreignKey: 'transaction_id' });
+
+
+// Helper function to check if a user is an agent (example)
+// You might put such helpers in a separate utility file or service
+db.User.prototype.isAgent = function() {
+  return this.role === 'agent';
+};
+
+db.User.prototype.isCashier = function() {
+  return this.role === 'cashier';
+};
+
+db.User.prototype.isAdmin = function() {
+  return this.role === 'admin';
+};
 
 
 // Sync all models that are not already in the database
