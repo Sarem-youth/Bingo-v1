@@ -24,32 +24,36 @@ module.exports = (sequelize) => {
         isIn: [['admin', 'agent', 'cashier']],
       },
     },
-    created_by: {
+    created_by: { // Links agent/cashier to admin or agent who created them
       type: DataTypes.INTEGER,
       references: {
-        model: 'Users', // Self-reference
+        model: 'users', // Table name for self-reference
         key: 'user_id',
       },
       onDelete: 'SET NULL',
+      allowNull: true, // Nullable as per schema
     },
-    parent_agent_id: {
+    parent_agent_id: { // Links a cashier to their parent agent
       type: DataTypes.INTEGER,
       references: {
-        model: 'Users', // Self-reference
+        model: 'users', // Table name for self-reference
         key: 'user_id',
       },
       onDelete: 'SET NULL',
+      allowNull: true, // Nullable as per schema
     },
     commission_rate: {
       type: DataTypes.DECIMAL(5, 4), // e.g., 0.1000 for 10.00%
+      allowNull: true, // Nullable, validation handles role-specific requirement
     },
     is_active: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
+    // created_at and updated_at are handled by Sequelize's timestamps option
   }, {
-    tableName: 'users', // Explicitly set table name
-    timestamps: true, // Sequelize will add createdAt and updatedAt
+    tableName: 'users',
+    timestamps: true,
     createdAt: 'created_at',
     updatedAt: 'updated_at',
     hooks: {
@@ -68,22 +72,33 @@ module.exports = (sequelize) => {
     },
     validate: {
       commissionRateRole() {
-        if (this.role === 'agent' && this.commission_rate === null) {
+        if (this.role === 'agent' && (this.commission_rate === null || this.commission_rate === undefined)) {
           throw new Error('Commission rate is required for agents.');
         }
-        if (this.role !== 'agent' && this.commission_rate !== null) {
+        if (this.role !== 'agent' && this.commission_rate !== null && this.commission_rate !== undefined) {
           throw new Error('Commission rate should only be set for agents.');
         }
       },
       parentAgentIdRole() {
-        // This validation is tricky with Sequelize hooks alone if parent_agent_id's role needs checking.
-        // It's often better handled at the service/controller layer or with database triggers.
-        // Here, we ensure parent_agent_id is set for cashiers.
-        if (this.role === 'cashier' && this.parent_agent_id === null) {
-          // This might be too strict if a cashier can be created by an admin directly without an agent initially.
-          // Adjust based on exact business rules.
-          // throw new Error('Parent agent ID is required for cashiers.');
+        // parent_agent_id should only be set for cashiers and should refer to an agent.
+        // The latter part (referring to an agent) is harder to enforce here without a direct query
+        // and is better handled in service layer or via DB trigger.
+        if (this.role === 'cashier' && (this.parent_agent_id === null || this.parent_agent_id === undefined)) {
+          // This check might be too strict if an admin can create a cashier not initially assigned to an agent.
+          // Based on the schema `parent_agent_id INTEGER REFERENCES Users(user_id) ON DELETE SET NULL`, it can be null.
+          // So, we should only check that if parent_agent_id is set, the role is 'cashier'.
+          // Or, if the role is 'cashier', parent_agent_id *can* be set.
         }
+        if (this.role !== 'cashier' && this.parent_agent_id !== null && this.parent_agent_id !== undefined) {
+          throw new Error('Parent agent ID should only be set for cashiers.');
+        }
+      },
+      createdByRole() {
+        // created_by can be null (e.g. for the first admin)
+        // If created_by is set, the creator should ideally be an admin (for agents/cashiers)
+        // or an agent (for cashiers). This is complex for model-level validation.
+        // The SQL schema allows created_by to be any user.
+        // We will rely on application logic to enforce creator roles.
       }
     }
   });

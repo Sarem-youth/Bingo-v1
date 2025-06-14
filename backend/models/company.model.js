@@ -15,18 +15,20 @@ module.exports = (sequelize) => {
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
-        model: 'Users', // Assuming your User model is named 'User' and table 'users'
+        model: 'users', // Corrected to table name
         key: 'user_id',
       },
       onDelete: 'RESTRICT', // An agent must exist
     },
     contact_info: {
       type: DataTypes.TEXT,
+      allowNull: true, // As per schema, can be null
     },
     is_active: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
+    // created_at and updated_at are handled by Sequelize's timestamps option
   }, {
     tableName: 'companies',
     timestamps: true,
