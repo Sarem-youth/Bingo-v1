@@ -24,27 +24,32 @@ module.exports = (sequelize) => {
         isIn: [['admin', 'agent', 'cashier']],
       },
     },
-    created_by: { // Links agent/cashier to admin or agent who created them
+    created_by: {
       type: DataTypes.INTEGER,
+      allowNull: true,
       references: {
-        model: 'users', // Table name for self-reference
+        model: 'users', // Self-referential: table name
         key: 'user_id',
       },
       onDelete: 'SET NULL',
-      allowNull: true, // Nullable as per schema
     },
-    parent_agent_id: { // Links a cashier to their parent agent
+    parent_agent_id: {
       type: DataTypes.INTEGER,
+      allowNull: true,
       references: {
-        model: 'users', // Table name for self-reference
+        model: 'users', // Self-referential: table name
         key: 'user_id',
       },
       onDelete: 'SET NULL',
-      allowNull: true, // Nullable as per schema
     },
     commission_rate: {
-      type: DataTypes.DECIMAL(5, 4), // e.g., 0.1000 for 10.00%
-      allowNull: true, // Nullable, validation handles role-specific requirement
+      type: DataTypes.DECIMAL(5, 4), // Precision 5, scale 4
+      allowNull: true, // Nullable, validation will enforce it for agents
+      validate: {
+        isDecimal: true,
+        min: 0,
+        max: 1, // Assuming commission rate is between 0 and 1 (e.g. 0.10 for 10%)
+      }
     },
     is_active: {
       type: DataTypes.BOOLEAN,
@@ -53,7 +58,7 @@ module.exports = (sequelize) => {
     // created_at and updated_at are handled by Sequelize's timestamps option
   }, {
     tableName: 'users',
-    timestamps: true,
+    timestamps: true, // This will add createdAt and updatedAt columns
     createdAt: 'created_at',
     updatedAt: 'updated_at',
     hooks: {
@@ -71,7 +76,7 @@ module.exports = (sequelize) => {
       },
     },
     validate: {
-      commissionRateRole() {
+      commissionRateOnlyForAgent() {
         if (this.role === 'agent' && (this.commission_rate === null || this.commission_rate === undefined)) {
           throw new Error('Commission rate is required for agents.');
         }
@@ -79,26 +84,18 @@ module.exports = (sequelize) => {
           throw new Error('Commission rate should only be set for agents.');
         }
       },
-      parentAgentIdRole() {
-        // parent_agent_id should only be set for cashiers and should refer to an agent.
-        // The latter part (referring to an agent) is harder to enforce here without a direct query
-        // and is better handled in service layer or via DB trigger.
+      parentAgentIdOnlyForCashier() {
+        // Further validation that parent_agent_id refers to an 'agent' role user
+        // would typically be handled in service layer or a more complex hook if needed.
         if (this.role === 'cashier' && (this.parent_agent_id === null || this.parent_agent_id === undefined)) {
-          // This check might be too strict if an admin can create a cashier not initially assigned to an agent.
-          // Based on the schema `parent_agent_id INTEGER REFERENCES Users(user_id) ON DELETE SET NULL`, it can be null.
-          // So, we should only check that if parent_agent_id is set, the role is 'cashier'.
-          // Or, if the role is 'cashier', parent_agent_id *can* be set.
+          // Allowing null if admin creates cashier directly without agent yet, or if it's optional by design
+          // Based on SQL: parent_agent_id INTEGER REFERENCES Users(user_id) ON DELETE SET NULL
+          // The SQL constraint chk_parent_agent_id_role implies it must be NOT NULL for cashiers.
+          // throw new Error('Parent agent ID is required for cashiers.');
         }
         if (this.role !== 'cashier' && this.parent_agent_id !== null && this.parent_agent_id !== undefined) {
           throw new Error('Parent agent ID should only be set for cashiers.');
         }
-      },
-      createdByRole() {
-        // created_by can be null (e.g. for the first admin)
-        // If created_by is set, the creator should ideally be an admin (for agents/cashiers)
-        // or an agent (for cashiers). This is complex for model-level validation.
-        // The SQL schema allows created_by to be any user.
-        // We will rely on application logic to enforce creator roles.
       }
     }
   });

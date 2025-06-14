@@ -11,19 +11,19 @@ module.exports = (sequelize) => {
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
-        model: 'companies', // Corrected to table name
+        model: 'companies', // Table name
         key: 'company_id',
       },
       onDelete: 'CASCADE',
     },
-    cashier_user_id: { // Cashier running the game
+    cashier_user_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
-        model: 'users', // Corrected to table name
+        model: 'users', // Table name
         key: 'user_id',
       },
-      onDelete: 'RESTRICT',
+      onDelete: 'RESTRICT', // A cashier must exist
     },
     start_time: {
       type: DataTypes.DATE,
@@ -31,11 +31,11 @@ module.exports = (sequelize) => {
     },
     end_time: {
       type: DataTypes.DATE,
-      allowNull: true, // Can be null if session is active
+      allowNull: true,
     },
     winning_pattern: {
-      type: DataTypes.STRING(255), // e.g., 'single_line', 'four_corners', 'blackout'
-      allowNull: true, // May not be set initially
+      type: DataTypes.STRING(255),
+      allowNull: true, // Or false if a pattern is always required
     },
     status: {
       type: DataTypes.STRING(50),
@@ -48,18 +48,22 @@ module.exports = (sequelize) => {
     jackpot_amount: {
       type: DataTypes.DECIMAL(10, 2),
       defaultValue: 0.00,
-      allowNull: false,
     },
     numbers_called: {
-      type: DataTypes.TEXT, // Storing as JSON string or comma-separated
+      type: DataTypes.TEXT, // Could be JSON or comma-separated string
       allowNull: true,
       get() {
         const rawValue = this.getDataValue('numbers_called');
-        try {
-          return rawValue ? JSON.parse(rawValue) : [];
-        } catch (e) {
-          return rawValue ? rawValue.split(',') : [];
+        if (rawValue) {
+          try {
+            return JSON.parse(rawValue);
+          } catch (e) {
+            // If not JSON, return as is (e.g. comma-separated string)
+            // Or handle specific format conversion if needed
+            return rawValue.split(',').map(n => parseInt(n.trim(), 10));
+          }
         }
+        return [];
       },
       set(value) {
         if (Array.isArray(value)) {
@@ -73,12 +77,19 @@ module.exports = (sequelize) => {
       type: DataTypes.INTEGER,
       allowNull: true,
     },
-    // created_at and updated_at are handled by Sequelize's timestamps option
+    // created_at is handled by Sequelize's timestamps option (if enabled)
+    // The SQL schema has a `created_at` column, so ensure timestamps: true is set or manually define it.
   }, {
     tableName: 'game_sessions',
-    timestamps: true,
-    createdAt: 'created_at',
-    updatedAt: 'updated_at',
+    timestamps: true, // This will add createdAt and updatedAt columns
+    // If your SQL schema specifically names it `created_at` and doesn't have `updated_at`
+    // you might need to configure: `updatedAt: false, createdAt: 'created_at'`
+    // Based on the provided SQL, it seems only `created_at` is explicitly defined, not `updated_at`.
+    // However, the table also has `start_time` and `end_time`.
+    // For consistency with other models, using Sequelize defaults for `createdAt` and `updatedAt` is fine.
+    // The SQL `created_at` can be mapped to Sequelize's `createdAt`.
+    createdAt: 'created_at', // Explicitly map to the column name in the SQL
+    updatedAt: 'updated_at', // Add this if you want Sequelize to manage it, or set to false
   });
 
   return GameSession;
