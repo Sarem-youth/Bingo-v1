@@ -1,9 +1,7 @@
 CREATE TABLE Companies (
     company_id SERIAL PRIMARY KEY,
     company_name VARCHAR(255) NOT NULL,
-    registered_by_agent_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE RESTRICT, -- An agent must exist
-    contact_info TEXT,
-    is_active BOOLEAN DEFAULT TRUE,
+    registered_by_agent_id INTEGER REFERENCES Users(user_id) ON DELETE RESTRICT, -- An agent must exist
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

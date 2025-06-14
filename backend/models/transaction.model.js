@@ -7,63 +7,83 @@ module.exports = (sequelize) => {
       primaryKey: true,
       autoIncrement: true,
     },
+    session_id: { // Renamed from game_session_id
+      type: DataTypes.INTEGER,
+      allowNull: true, // As per new schema (was false in old model if game_session_id)
+      references: {
+        model: 'game_sessions', // Corrected to table name
+        key: 'session_id', // Corrected to new PK name
+      },
+      onDelete: 'SET NULL',
+    },
+    cashier_id: { // Added
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'users', // Corrected to table name
+        key: 'user_id',
+      },
+      onDelete: 'RESTRICT',
+    },
+    type: {
+      type: DataTypes.STRING(15), // Adjusted size
+      allowNull: false,
+      validate: {
+        isIn: [['buy_in', 'payout', 'reconciliation']],
+      },
+    },
     amount: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
     },
-    type: {
-      type: DataTypes.STRING(50),
-      allowNull: false,
-      validate: {
-        isIn: [['player_buy_in', 'payout', 'agent_commission_payout', 'admin_commission']],
-      },
-    },
-    game_session_id: {
-      type: DataTypes.INTEGER,
-      allowNull: true, // May not be linked to a game session (e.g., commission payouts)
-      references: {
-        model: 'game_sessions', // table name
-        key: 'game_session_id',
-      },
-      onDelete: 'SET NULL',
-    },
-    user_id: { // Cashier who processed or is related to the transaction
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      references: {
-        model: 'users', // table name
-        key: 'user_id',
-      },
-      onDelete: 'RESTRICT',
-    },
-    company_id: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      references: {
-        model: 'companies', // table name
-        key: 'company_id',
-      },
-      onDelete: 'RESTRICT',
-    },
-    agent_id: { // Agent associated with the company for this transaction
-      type: DataTypes.INTEGER,
-      allowNull: false, // Assuming all game-related transactions will have an associated agent via the company
-      references: {
-        model: 'users', // table name
-        key: 'user_id',
-      },
-      onDelete: 'RESTRICT',
-    },
-    notes: {
+    notes: { // Retained from existing
       type: DataTypes.TEXT,
       allowNull: true,
     },
-    // timestamp is handled by Sequelize's createdAt timestamp
+    timestamp: { // Retained from existing, default changed in SQL
+      type: DataTypes.DATE, // Sequelize uses DATE for TIMESTAMP WITH TIME ZONE
+      defaultValue: DataTypes.NOW,
+    },
+    // user_id: { // Removed, replaced by cashier_id
+    //   type: DataTypes.INTEGER,
+    //   allowNull: false,
+    //   references: {
+    //     model: 'users',
+    //     key: 'user_id',
+    //   },
+    //   onDelete: 'RESTRICT',
+    // },
+    // company_id: { // Removed
+    //   type: DataTypes.INTEGER,
+    //   allowNull: false,
+    //   references: {
+    //     model: 'companies',
+    //     key: 'company_id',
+    //   },
+    //   onDelete: 'RESTRICT',
+    // },
+    // agent_id: { // Removed
+    //   type: DataTypes.INTEGER,
+    //   allowNull: true, // Was false in old model
+    //   references: {
+    //     model: 'users',
+    //     key: 'user_id',
+    //   },
+    //   onDelete: 'RESTRICT',
+    // },
+    // transaction_reference: { // Removed
+    //   type: DataTypes.STRING(255),
+    //   allowNull: true,
+    // },
+    // payment_method: { // Removed
+    //   type: DataTypes.STRING(50),
+    //   allowNull: true,
+    // },
   }, {
     tableName: 'transactions',
-    timestamps: true,
-    createdAt: 'timestamp', // Using 'timestamp' as per the SQL schema
-    updatedAt: 'updated_at', // Sequelize will add this, ensure it's in your DB or disable it if not needed
+    timestamps: false, // New schema doesn't show created_at/updated_at, but has 'timestamp' field
+    // createdAt: 'created_at', // Removed
+    // updatedAt: 'updated_at', // Removed
   });
 
   return Transaction;

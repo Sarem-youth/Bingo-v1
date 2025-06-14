@@ -1,14 +1,12 @@
 CREATE TABLE Users (
     user_id SERIAL PRIMARY KEY,
     username VARCHAR(255) UNIQUE NOT NULL,
-    password TEXT NOT NULL, -- Hashed password
-    role VARCHAR(50) NOT NULL CHECK (role IN ('admin', 'agent', 'cashier')),
-    created_by INTEGER REFERENCES Users(user_id) ON DELETE SET NULL, -- Links agent/cashier to admin
-    parent_agent_id INTEGER REFERENCES Users(user_id) ON DELETE SET NULL, -- Links cashier to their parent agent
-    commission_rate DECIMAL(5, 4), -- e.g., 0.1000 for 10.00%
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    password_hash VARCHAR(255) NOT NULL, -- Changed from password
+    role VARCHAR(10) NOT NULL CHECK (role IN ('admin', 'agent', 'cashier')), -- Adjusted VARCHAR size
+    parent_agent_id INTEGER REFERENCES Users(user_id) ON DELETE SET NULL, -- Links cashier to agent
+    commission_rate DECIMAL(5, 4), -- For agents only
+    is_active BOOLEAN DEFAULT true,
+    created_by INTEGER REFERENCES Users(user_id) ON DELETE SET NULL -- Retained from existing, though not in new spec
 );
 
 -- Add a check constraint to ensure commission_rate is set only for agents

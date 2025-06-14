@@ -1,19 +1,22 @@
 CREATE TABLE GameSessions (
-    game_session_id SERIAL PRIMARY KEY,
-    company_id INTEGER NOT NULL REFERENCES Companies(company_id) ON DELETE CASCADE,
-    cashier_user_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE RESTRICT, -- Cashier running the game
-    start_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    session_id SERIAL PRIMARY KEY, -- Renamed from game_session_id
+    -- company_id INTEGER NOT NULL REFERENCES Companies(company_id) ON DELETE CASCADE, -- Removed
+    -- cashier_user_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE RESTRICT, -- Removed
+    start_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(), -- Changed default
     end_time TIMESTAMP WITH TIME ZONE,
-    winning_pattern VARCHAR(255), -- e.g., 'single_line', 'four_corners', 'blackout'
-    status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'completed', 'cancelled')),
-    jackpot_amount DECIMAL(10, 2) DEFAULT 0.00,
-    numbers_called TEXT, -- Could be a JSON array or comma-separated string of numbers
-    last_called_number INTEGER,
+    picked_numbers INTEGER[], -- Added
+    status VARCHAR(10) NOT NULL CHECK (status IN ('active', 'paused', 'finished')), -- Adjusted VARCHAR size and values
+    winning_pattern JSONB, -- Changed from VARCHAR(255)
+    total_buy_in DECIMAL(12, 2) DEFAULT 0.00, -- Added
+    prize_payout DECIMAL(12, 2) DEFAULT 0.00, -- Added
+    -- jackpot_amount DECIMAL(10, 2) DEFAULT 0.00, -- Removed
+    -- numbers_called TEXT, -- Removed
+    -- last_called_number INTEGER, -- Removed
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Indexes for performance
-CREATE INDEX idx_gamesessions_company_id ON GameSessions(company_id);
-CREATE INDEX idx_gamesessions_cashier_user_id ON GameSessions(cashier_user_id);
+-- CREATE INDEX idx_gamesessions_company_id ON GameSessions(company_id); -- Removed
+-- CREATE INDEX idx_gamesessions_cashier_user_id ON GameSessions(cashier_user_id); -- Removed
 CREATE INDEX idx_gamesessions_status ON GameSessions(status);

@@ -20,22 +20,12 @@ module.exports = (sequelize) => {
       },
       onDelete: 'RESTRICT', // An agent must exist
     },
-    contact_info: {
-      type: DataTypes.TEXT,
-      allowNull: true, // As per schema, can be null
-    },
-    is_active: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: true,
-    },
     // created_at and updated_at are handled by Sequelize's timestamps option
   }, {
     tableName: 'companies',
     timestamps: true,
     createdAt: 'created_at',
     updatedAt: 'updated_at',
-    // Add validation to ensure registered_by_agent_id refers to a user with the 'agent' role.
-    // This is best done at the service layer before saving, or via a database trigger if complex.
   });
 
   return Company;
